@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/button";
 import { Card } from "@/components/card";
 import { CheckIcon, PhoneIcon } from "@/components/icons";
+import { applySavedOrderStatuses } from "@/lib/cart";
 import { formatDate, formatMoney, formatTime } from "@/lib/format";
 import type { PublicOrder } from "@/lib/queries";
 import type { OrderStatus, StoreProfile } from "@/lib/storefront-types";
@@ -47,6 +48,12 @@ export function OrderTracker({
     order.status === "delivered" ||
     order.status === "rejected" ||
     order.status === "cancelled";
+
+  // Keep the device's saved copy in step, so the Orders badge clears the moment
+  // this order settles rather than waiting for the next visit.
+  useEffect(() => {
+    applySavedOrderStatuses(new Map([[token, order.status]]));
+  }, [token, order.status]);
 
   useEffect(() => {
     if (closed) return;
@@ -95,7 +102,7 @@ export function OrderTracker({
   const current = TIMELINE.findIndex((stage) => stage.status === order.status);
 
   return (
-    <main className="flex flex-col gap-5 px-5 pb-8">
+    <main className="flex flex-col gap-5 px-5 pb-28">
       <div>
         <p className="text-[13px] text-ink-3">Order {order.ref}</p>
         <h2 className="text-[22px] font-bold text-ink">

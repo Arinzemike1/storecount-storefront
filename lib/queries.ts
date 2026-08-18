@@ -180,24 +180,33 @@ export async function consumeIpQuota(ip: string, limit: number): Promise<boolean
   }
 }
 
-/** Caps how many orders one phone can place at one store per hour. */
-export async function withinPhoneQuota(
+/**
+ * Caps how many orders one customer can place at one store per hour.
+ *
+ * Keyed on customer_id rather than the phone string: orders store the number
+ * exactly as the customer typed it (so the merchant can read and dial it),
+ * which means the same person's "08088…" and "+23480 88…" are different
+ * strings. The customers table normalizes, so its id is the stable identity.
+ */
+export async function withinCustomerQuota(
   storeId: string,
-  phone: string,
+  customerId: string | null,
   limit: number,
 ): Promise<boolean> {
+  if (!customerId) return true;
+
   const since = new Date(Date.now() - 60 * 60_000).toISOString();
   try {
     const { count } = await db
       .from("orders")
       .select("id", { count: "exact", head: true })
       .eq("store_id", storeId)
-      .eq("customer_phone", phone)
+      .eq("customer_id", customerId)
       .gte("placed_at", since);
 
     return (count ?? 0) < limit;
   } catch (err) {
-    console.error("[throttle] phone quota check failed:", err);
+    console.error("[throttle] customer quota check failed:", err);
     return true;
   }
 }
@@ -206,14 +215,22 @@ export async function withinPhoneQuota(
 // Order placement
 // ---------------------------------------------------------------------------
 
+/**
+ * Finds or creates the customer record. `phone` must be the NORMALIZED form —
+ * it is the unique key that ties a returning customer to their history. The
+ * number shown to the merchant lives on the order, not here.
+ */
 export async function upsertCustomer(
-  phone: string,
+  normalizedPhone: string,
   name: string,
 ): Promise<string | null> {
   const now = new Date().toISOString();
   const { data } = await db
     .from("customers")
-    .upsert({ phone, name, updated_at: now }, { onConflict: "phone" })
+    .upsert(
+      { phone: normalizedPhone, name, updated_at: now },
+      { onConflict: "phone" },
+    )
     .select("id")
     .maybeSingle();
 
@@ -240,6 +257,7 @@ export interface NewOrder {
   currency: string;
   fulfilmentMethod: FulfilmentMethod;
   customerName: string;
+  /** As the customer typed it — this is what the merchant reads and dials. */
   customerPhone: string;
   deliveryAddress: string | null;
   customerNote: string | null;

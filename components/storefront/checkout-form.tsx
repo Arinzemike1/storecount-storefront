@@ -157,7 +157,8 @@ export function CheckoutForm({
         value={phone}
         onChange={(e) => setPhone(e.target.value)}
         error={errors.phone}
-        placeholder="080…"
+        placeholder="08088475643"
+        maxLength={11}
         hint="The shop will call this number to confirm."
       />
 

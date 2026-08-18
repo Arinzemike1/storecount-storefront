@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { Store } from "./store-base";
+import type { OrderStatus } from "./storefront-types";
 
 export interface CartLine {
   productId: string;
@@ -16,6 +17,18 @@ export interface SavedOrder {
   trackingToken: string;
   total: number;
   placedAt: string;
+  /**
+   * Last status we heard from the server. Absent on orders saved before this
+   * field existed — treated as still in flight until a refresh says otherwise.
+   */
+  status?: OrderStatus;
+}
+
+/** Statuses where there is nothing left for the customer to wait on. */
+const SETTLED: OrderStatus[] = ["delivered", "rejected", "cancelled"];
+
+export function isOrderActive(order: SavedOrder): boolean {
+  return !order.status || !SETTLED.includes(order.status);
 }
 
 /**
@@ -75,7 +88,54 @@ export function useSavedOrders(): SavedOrder[] {
 }
 
 export function rememberOrder(order: SavedOrder): void {
-  savedOrdersStore.update((all) => [order, ...all].slice(0, 50));
+  savedOrdersStore.update((all) =>
+    [{ status: "pending" as OrderStatus, ...order }, ...all].slice(0, 50),
+  );
+}
+
+/**
+ * Folds freshly-read statuses into the saved list.
+ *
+ * Writes only when something actually changed. That matters: the store feeds
+ * useSyncExternalStore, and an unconditional write would re-render every
+ * subscriber, re-run the effect that fetched these statuses, and loop.
+ */
+export function applySavedOrderStatuses(next: Map<string, OrderStatus>): void {
+  const all = savedOrdersStore.get();
+  let changed = false;
+
+  const updated = all.map((order) => {
+    const status = next.get(order.trackingToken);
+    if (!status || status === order.status) return order;
+    changed = true;
+    return { ...order, status };
+  });
+
+  if (changed) savedOrdersStore.set(updated);
+}
+
+/** Re-reads the status of every order saved on this device for one store. */
+export async function refreshSavedOrderStatuses(slug: string): Promise<void> {
+  const mine = savedOrdersStore.get().filter((order) => order.slug === slug);
+  if (mine.length === 0) return;
+
+  const entries = await Promise.all(
+    mine.map(async (order) => {
+      try {
+        const res = await fetch(`/api/orders/${order.trackingToken}`);
+        if (!res.ok) return null;
+        const data = (await res.json()) as { order: { status: OrderStatus } };
+        return [order.trackingToken, data.order.status] as const;
+      } catch {
+        // Offline. The saved status stays as it was.
+        return null;
+      }
+    }),
+  );
+
+  applySavedOrderStatuses(
+    new Map(entries.filter((entry): entry is [string, OrderStatus] => entry !== null)),
+  );
 }
 
 export function useHydrated(): boolean {

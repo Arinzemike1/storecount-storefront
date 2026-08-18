@@ -5,15 +5,21 @@ import {
   getStoreProducts,
   insertOrder,
   upsertCustomer,
-  withinPhoneQuota,
+  withinCustomerQuota,
 } from "@/lib/queries";
 import type { FulfilmentMethod, OrderItem } from "@/lib/storefront-types";
 
 const MAX_ORDERS_PER_IP_PER_MINUTE = 5;
-const MAX_ORDERS_PER_PHONE_PER_HOUR = 5;
+const MAX_ORDERS_PER_CUSTOMER_PER_HOUR = 5;
 const MAX_LINES = 50;
 
-/** Same rule as the merchant app's lib/auth.ts normalizePhone. */
+/**
+ * Same rule as the merchant app's lib/auth.ts normalizePhone.
+ *
+ * Used ONLY as a matching key for the customers table. It strips leading zeros,
+ * so it is not a phone number a human can dial — never store its output as the
+ * contact number on an order.
+ */
 function normalizePhone(phone: string): string {
   return phone.replace(/\D/g, "").replace(/^0+/, "");
 }
@@ -98,8 +104,17 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: "A delivery address is required." }, { status: 400 });
   }
 
-  const phone = normalizePhone(rawPhone);
-  if (!(await withinPhoneQuota(store.id, phone, MAX_ORDERS_PER_PHONE_PER_HOUR))) {
+  // Resolve identity before throttling: the quota counts a person, and the
+  // normalized phone on `customers` is the only stable handle on one.
+  const customerId = await upsertCustomer(normalizePhone(rawPhone), customerName);
+
+  if (
+    !(await withinCustomerQuota(
+      store.id,
+      customerId,
+      MAX_ORDERS_PER_CUSTOMER_PER_HOUR,
+    ))
+  ) {
     return Response.json(
       { error: "You've placed several orders already. Please call the shop." },
       { status: 429 },
@@ -168,8 +183,6 @@ export async function POST(request: NextRequest) {
   const deliveryFee = fulfilmentMethod === "delivery" ? store.deliveryFee : 0;
   const total = Math.round((subtotal + deliveryFee) * 100) / 100;
 
-  const customerId = await upsertCustomer(phone, customerName);
-
   const created = await insertOrder({
     storeId: store.id,
     customerId,
@@ -181,7 +194,8 @@ export async function POST(request: NextRequest) {
     currency: store.currency,
     fulfilmentMethod,
     customerName,
-    customerPhone: phone,
+    // Exactly as typed, so the merchant sees a number they can dial.
+    customerPhone: rawPhone,
     deliveryAddress: fulfilmentMethod === "delivery" ? deliveryAddress : null,
     customerNote: customerNote || null,
   });

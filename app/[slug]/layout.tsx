@@ -1,6 +1,22 @@
-import Link from "next/link";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { BottomNav } from "@/components/storefront/bottom-nav";
+import { StoreHeader } from "@/components/storefront/store-header";
 import { getStoreBySlug } from "@/lib/queries";
+
+/**
+ * Points every page under a store at that store's manifest, so "Add to home
+ * screen" works from the catalog, the cart, or an order tracking page alike.
+ * Only the slug is needed here — no extra query.
+ */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  return { manifest: `/${slug}/manifest.webmanifest` };
+}
 
 export default async function StoreLayout({
   children,
@@ -15,22 +31,9 @@ export default async function StoreLayout({
 
   return (
     <div className="flex-1 flex flex-col mx-auto w-full max-w-md">
-      <header className="sticky top-0 z-30 bg-bg/90 backdrop-blur pt-safe">
-        <div className="px-5 h-14 flex items-center">
-          <Link href={`/${slug}`} className="min-w-0">
-            <h1 className="text-[20px] font-bold tracking-tight text-ink truncate">
-              {store.name}
-            </h1>
-          </Link>
-        </div>
-        {!store.isOpen && (
-          <p className="bg-warning-soft text-warning text-[13px] font-medium px-5 py-2">
-            This shop isn&apos;t taking orders right now. Have a look around and
-            check back soon.
-          </p>
-        )}
-      </header>
+      <StoreHeader slug={slug} store={store} />
       <div className="flex-1 flex flex-col">{children}</div>
+      <BottomNav slug={slug} />
     </div>
   );
 }

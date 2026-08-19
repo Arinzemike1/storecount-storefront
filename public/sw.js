@@ -42,8 +42,15 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE).then((cache) => cache.put(request, copy));
+          // "/" redirects to the default shop. A response that followed a
+          // redirect must never be cached: replaying one for a navigation
+          // throws ("... response was redirected but the request mode was not
+          // 'follow'"), which would break the app offline rather than falling
+          // back. The redirect target caches itself on its own request.
+          if (!response.redirected) {
+            const copy = response.clone();
+            caches.open(CACHE).then((cache) => cache.put(request, copy));
+          }
           return response;
         })
         .catch(() =>

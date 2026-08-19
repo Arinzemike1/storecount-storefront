@@ -88,6 +88,70 @@ function toPublicOrder(row: Row): Omit<Order, "pendingSaleId" | "saleId"> {
 
 export type PublicOrder = ReturnType<typeof toPublicOrder>;
 
+/** Mirrors the `stores_slug_format` CHECK constraint in schema.sql. */
+const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/;
+
+/**
+ * Reduces a configured value to a bare slug.
+ *
+ * "The shop `/` opens" reads like it wants a link, so a full URL is the natural
+ * thing to put in the env var — and `/${aFullUrl}` silently produces a mangled
+ * path rather than an error. Accept a URL, a path, or a bare slug and keep the
+ * first meaningful segment.
+ */
+function toSlug(value: string): string | null {
+  let text = value.trim().replace(/^["']|["']$/g, "");
+  if (!text) return null;
+
+  if (text.includes("://")) {
+    try {
+      text = new URL(text).pathname;
+    } catch {
+      return null;
+    }
+  }
+
+  const segment = text.split(/[?#]/)[0].split("/").filter(Boolean)[0] ?? "";
+  const slug = segment.toLowerCase();
+  return SLUG_PATTERN.test(slug) ? slug : null;
+}
+
+/**
+ * The shop to open when someone lands on "/" — the installed PWA's start_url
+ * for a root install, or anyone typing the bare domain.
+ *
+ * `DEFAULT_STORE_SLUG` wins when set, and skips the database entirely. With no
+ * config, a deployment serving exactly one published shop is unambiguous, so
+ * use it. Two or more and there is no right answer, so fall through to the
+ * landing page rather than guessing.
+ */
+export async function getDefaultStoreSlug(): Promise<string | null> {
+  const configured = process.env.DEFAULT_STORE_SLUG;
+  if (configured?.trim()) {
+    const slug = toSlug(configured);
+    if (slug) return slug;
+    // Don't hard-fail on bad config: fall through to auto-detection, which is
+    // usually right anyway, but say loudly why the setting was ignored.
+    console.warn(
+      `[queries] DEFAULT_STORE_SLUG="${configured}" is not a valid store slug ` +
+        `— ignoring it. Use the slug alone, e.g. "store", not a full URL.`,
+    );
+  }
+
+  try {
+    const { data } = await db
+      .from("stores")
+      .select("slug")
+      .eq("is_published", true)
+      .limit(2);
+
+    return data?.length === 1 ? String(data[0].slug) : null;
+  } catch (err) {
+    console.error("[queries] default store lookup failed:", err);
+    return null;
+  }
+}
+
 export async function getStoreBySlug(slug: string): Promise<StoreProfile | null> {
   const { data } = await db
     .from("stores")

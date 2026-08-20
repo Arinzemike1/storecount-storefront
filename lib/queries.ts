@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { createHash, randomBytes } from "crypto";
 import { db } from "./db";
 import type {
@@ -152,28 +153,41 @@ export async function getDefaultStoreSlug(): Promise<string | null> {
   }
 }
 
-export async function getStoreBySlug(slug: string): Promise<StoreProfile | null> {
-  const { data } = await db
-    .from("stores")
-    .select("*")
-    .eq("slug", slug)
-    .eq("is_published", true)
-    .maybeSingle();
+/**
+ * Wrapped in React's `cache()` so one request hits Postgres once.
+ *
+ * Next deduplicates `fetch()` automatically, but supabase-js does not go
+ * through that path — so without this, rendering the catalog looked up the same
+ * store three times (layout, generateMetadata, page) and the same product list
+ * twice, each a serial round trip to a remote database.
+ *
+ * The cache lives for a single server request only; there is no staleness
+ * window and nothing to invalidate.
+ */
+export const getStoreBySlug = cache(
+  async (slug: string): Promise<StoreProfile | null> => {
+    const { data } = await db
+      .from("stores")
+      .select("*")
+      .eq("slug", slug)
+      .eq("is_published", true)
+      .maybeSingle();
 
-  return data ? toStoreProfile(data) : null;
-}
+    return data ? toStoreProfile(data) : null;
+  },
+);
 
-export async function getStoreProducts(
-  storeId: string,
-): Promise<StorefrontProduct[]> {
-  const { data } = await db
-    .from("store_products")
-    .select("*")
-    .eq("store_id", storeId)
-    .order("name", { ascending: true });
+export const getStoreProducts = cache(
+  async (storeId: string): Promise<StorefrontProduct[]> => {
+    const { data } = await db
+      .from("store_products")
+      .select("*")
+      .eq("store_id", storeId)
+      .order("name", { ascending: true });
 
-  return (data ?? []).map(toProduct);
-}
+    return (data ?? []).map(toProduct);
+  },
+);
 
 export async function getOrderByToken(token: string): Promise<PublicOrder | null> {
   const { data } = await db

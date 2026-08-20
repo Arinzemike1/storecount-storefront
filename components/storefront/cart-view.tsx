@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Button } from "@/components/button";
 import { Card } from "@/components/card";
 import { EmptyState } from "@/components/empty-state";
-import { CartIcon, MinusIcon, PlusIcon } from "@/components/icons";
+import { CartIcon, MinusIcon, PlusIcon, TrashIcon } from "@/components/icons";
 import { setCartQuantity, useCart, useHydrated } from "@/lib/cart";
 import { formatMoney } from "@/lib/format";
 import type { StoreProfile, StorefrontProduct } from "@/lib/storefront-types";
@@ -69,7 +69,7 @@ export function CartView({
           {lines.map(({ line, product }) => (
             <div
               key={product.productId}
-              className="flex items-center gap-3 px-4 py-3.5"
+              className="flex items-center gap-2.5 px-4 py-3.5"
             >
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-ink text-[15px] truncate">
@@ -110,6 +110,18 @@ export function CartView({
               <p className="w-20 text-right font-semibold text-ink tabular-nums">
                 {money(product.price * line.quantity)}
               </p>
+
+              {/* Dropping a line takes one tap here rather than holding the
+                  minus button down to zero. Negative margin lets the icon sit
+                  flush right against the card's padding. */}
+              <button
+                type="button"
+                aria-label={`Remove ${product.name} from cart`}
+                onClick={() => setCartQuantity(slug, product.productId, 0)}
+                className="-mr-1 size-9 shrink-0 rounded-full flex items-center justify-center text-ink-3 active:bg-danger-soft active:text-danger transition-colors"
+              >
+                <TrashIcon className="size-4.5" />
+              </button>
             </div>
           ))}
         </Card>

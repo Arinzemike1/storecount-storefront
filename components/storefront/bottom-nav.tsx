@@ -69,6 +69,11 @@ export function BottomNav({ slug }: { slug: string }) {
             <Link
               key={href}
               href={href}
+              // These two routes are dynamic, so Next only prefetches as far as
+              // the loading boundary by default. Forcing a full prefetch warms
+              // the RSC payload while the customer is still reading, turning
+              // the tap into a near-instant swap.
+              prefetch
               aria-current={active ? "page" : undefined}
               className={`flex flex-col items-center gap-1 pt-2.5 pb-2 text-[11px] font-medium transition-colors ${
                 active ? "text-primary" : "text-ink-3 active:text-ink-2"

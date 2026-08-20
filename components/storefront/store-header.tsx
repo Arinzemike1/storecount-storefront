@@ -17,6 +17,10 @@ import Image from "next/image";
 function backHrefFor(pathname: string, slug: string): string | null {
   if (pathname.endsWith("/checkout")) return `/${slug}/cart`;
   if (pathname.endsWith("/cart")) return `/${slug}`;
+  // A tracked order belongs to the saved-orders list, whether it was reached
+  // from there or from the link handed out at checkout. Matched on the token
+  // segment so the list itself (/orders) doesn't catch this.
+  if (/\/order\/[^/]+$/.test(pathname)) return `/${slug}/orders`;
   return null;
 }
 

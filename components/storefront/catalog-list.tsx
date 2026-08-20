@@ -2,10 +2,17 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { ConfirmSheet } from "@/components/confirm-sheet";
 import { EmptyState } from "@/components/empty-state";
-import { BoxIcon, MinusIcon, PlusIcon, SearchIcon } from "@/components/icons";
+import {
+  BoxIcon,
+  MinusIcon,
+  PlusIcon,
+  SearchIcon,
+  TrashIcon,
+} from "@/components/icons";
 import { NAV_OFFSET } from "@/components/storefront/bottom-nav";
-import { setCartQuantity, useCart, useHydrated } from "@/lib/cart";
+import { clearCart, setCartQuantity, useCart, useHydrated } from "@/lib/cart";
 import { formatMoney } from "@/lib/format";
 import type { StoreProfile, StorefrontProduct } from "@/lib/storefront-types";
 
@@ -20,6 +27,7 @@ export function CatalogList({ slug, store, products }: CatalogListProps) {
   const hydrated = useHydrated();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string | null>(null);
+  const [confirmingClear, setConfirmingClear] = useState(false);
 
   const money = (amount: number) => formatMoney(amount, store);
 
@@ -139,20 +147,46 @@ export function CatalogList({ slug, store, products }: CatalogListProps) {
           className="fixed inset-x-0 z-30 px-5 pb-3"
           style={{ bottom: NAV_OFFSET }}
         >
-          <Link
-            href={`/${slug}/cart`}
-            className="mx-auto max-w-md flex items-center justify-between gap-3 h-14 px-5 rounded-control bg-primary text-on-primary shadow-float active:scale-[0.98] transition-transform"
-          >
-            <span className="flex items-center gap-2 font-semibold">
-              <span className="size-6 rounded-full bg-on-primary/20 text-[12px] font-bold flex items-center justify-center">
-                {totalItems}
+          {/* The link and the empty-cart button are siblings rather than nested:
+              a button inside an anchor is invalid, and tapping "clear" must not
+              also navigate to the cart. */}
+          <div className="mx-auto max-w-md flex items-center gap-3 h-14 pl-5 pr-2 rounded-control bg-primary text-on-primary shadow-float">
+            <Link
+              href={`/${slug}/cart`}
+              className="flex-1 min-w-0 h-full flex items-center justify-between gap-3 active:scale-[0.98] transition-transform"
+            >
+              <span className="flex items-center gap-2 font-semibold">
+                <span className="size-6 rounded-full bg-on-primary/20 text-[12px] font-bold flex items-center justify-center">
+                  {totalItems}
+                </span>
+                View cart
               </span>
-              View cart
-            </span>
-            <span className="font-bold">{money(subtotal)}</span>
-          </Link>
+              <span className="font-bold">{money(subtotal)}</span>
+            </Link>
+
+            <button
+              type="button"
+              aria-label="Empty cart"
+              onClick={() => setConfirmingClear(true)}
+              className="size-10 shrink-0 rounded-full flex items-center justify-center text-on-primary/75 active:bg-on-primary/15 active:text-on-primary transition-colors"
+            >
+              <TrashIcon className="size-5" />
+            </button>
+          </div>
         </div>
       )}
+
+      <ConfirmSheet
+        open={confirmingClear}
+        destructive
+        title="Remove all items?"
+        message="Everything in your cart will be cleared. This can't be undone."
+        onConfirm={() => {
+          clearCart(slug);
+          setConfirmingClear(false);
+        }}
+        onClose={() => setConfirmingClear(false)}
+      />
     </>
   );
 }

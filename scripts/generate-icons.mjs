@@ -17,7 +17,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const source = process.argv[2] ?? join(root, "public", "app-icon-source.png");
+const source = process.argv[2] ?? join(root, "public", "app-icon-source2.png");
 
 /** Backdrop for flattened icons. Sampled from the source artwork. */
 const BRAND_GREEN = [10, 74, 47];

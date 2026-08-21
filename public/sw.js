@@ -10,7 +10,13 @@
  *   placed, so a stale page can never lock in an old price.
  * - Build assets and icons: cache-first (immutable by content hash).
  */
-const CACHE = "3brothers-v1";
+/*
+ * Bump this whenever a file under public/ changes in place — icons especially.
+ * Those are served cache-first under a stable URL, so a returning browser keeps
+ * handing out the old bytes forever otherwise. The activate handler below
+ * deletes every cache that isn't this one, so a new name is the eviction.
+ */
+const CACHE = "3brothers-v2";
 
 self.addEventListener("install", () => {
   // Nothing to precache: every page belongs to a store we don't know yet.
